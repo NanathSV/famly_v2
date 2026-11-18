@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarClock, Check, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowRight, CalendarClock, Check, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { useFinance } from '../context/FinanceContext';
+import { analisarFinancasCasal } from '../lib/gemini';
 import { formatarBRL, formatarData, formatarPercentual, nomeDoMes } from '../utils/calculations';
 import { Botao, Chip, Painel, ProgressBar, SecaoTitulo, SplitBar, tomDoStatus } from '../components/ui';
 
@@ -43,6 +45,55 @@ function RendaDoMes() {
   );
 }
 
+function ConsultorIA() {
+  const { resumoMes, evolucaoMensal, orcamentos, metasDetalhadas, mesSelecionado } = useFinance();
+  const [analise, setAnalise] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  async function gerarAnalise() {
+    setCarregando(true);
+    setErro('');
+    try {
+      const texto = await analisarFinancasCasal({
+        resumoMes,
+        evolucaoMensal,
+        orcamentos,
+        metasDetalhadas,
+        mesSelecionado,
+      });
+      setAnalise(texto);
+    } catch (e) {
+      setErro(e.message || 'Não foi possível gerar a análise agora.');
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  return (
+    <section>
+      <SecaoTitulo titulo="Consultor IA do casal" />
+      <Painel>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-600">
+            Diagnóstico rápido dos gastos, orçamentos e metas de {nomeDoMes(mesSelecionado)}.
+          </p>
+          <Botao variante="primario" tamanho="sm" onClick={gerarAnalise} disabled={carregando}>
+            <Sparkles size={14} className="mr-1.5 inline" />
+            {carregando ? 'Analisando...' : analise ? 'Atualizar' : 'Analisar mês'}
+          </Botao>
+        </div>
+        {erro && <p className="mt-3 text-xs font-semibold text-rose-600">{erro}</p>}
+        {analise && (
+          <div className="mt-4 whitespace-pre-line rounded-xl bg-slate-50 p-3.5 text-sm leading-relaxed text-slate-800 ring-1 ring-slate-200/70">
+            {analise}
+          </div>
+        )}
+      </Painel>
+    </section>
+  );
+}
+
 function EvolucaoGastos() {
   const { evolucaoMensal, mesSelecionado, setMesSelecionado } = useFinance();
   const { mesAnteriorKey, gastoAnterior, diferenca, percentual, melhorou, historicoMeses, comparativoCategorias } = evolucaoMensal;
@@ -77,7 +128,6 @@ function EvolucaoGastos() {
           )}
         </div>
 
-        {/* Gráfico de barras dos últimos 6 meses (clicável para navegar no mês) */}
         <div className="mt-5 grid grid-cols-6 items-end gap-2 pt-2">
           {historicoMeses.map((m) => {
             const alturaPct = Math.max(8, Math.round((m.totalGasto / maxValor) * 100));
@@ -273,6 +323,7 @@ export default function Dashboard() {
       <h1 className="text-2xl font-extrabold text-slate-900">Olá, {getPessoa(perfilAtivo)?.nome}</h1>
       <RendaDoMes />
       <EvolucaoGastos />
+      <ConsultorIA />
       <ResumoAcerto />
       <ProximosVencimentos />
       <OrcamentosEmAlerta />
