@@ -8,11 +8,16 @@
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply font-sans;
+    @apply font-sans text-[#1E1B18];
     min-height: 100dvh;
+    background-color: #FFFBF2;
+    background-image:
+      linear-gradient(to right, rgba(30, 27, 24, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(30, 27, 24, 0.06) 1px, transparent 1px);
+    background-size: 22px 22px;
   }
   :focus-visible {
-    outline: 2px solid #7c3aed;
+    outline: 2px solid #1E1B18;
     outline-offset: 2px;
   }
   input,
@@ -20,6 +25,17 @@
   textarea {
     font-size: 16px;
   }
+}
+
+/* Efeito de barra segmentada estilo retro OS (LOADING...) */
+.retro-progress-fill {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 6px,
+    rgba(30, 27, 24, 0.22) 6px,
+    rgba(30, 27, 24, 0.22) 8px
+  );
 }
 
 @media (prefers-reduced-motion: reduce) {
