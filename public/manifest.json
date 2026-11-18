@@ -1,0 +1,10 @@
+{
+  "name": "Finanças do Casal — Nathalia & Alisson",
+  "short_name": "Finanças Casal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#7c3aed",
+  "lang": "pt-BR",
+  "icons": []
+}
