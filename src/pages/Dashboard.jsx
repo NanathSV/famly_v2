@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarClock, Check } from 'lucide-react';
+import { ArrowRight, CalendarClock, Check, TrendingDown, TrendingUp } from 'lucide-react';
 import { useFinance } from '../context/FinanceContext';
 import { formatarBRL, formatarData, formatarPercentual, nomeDoMes } from '../utils/calculations';
 import { Botao, Chip, Painel, ProgressBar, SecaoTitulo, SplitBar, tomDoStatus } from '../components/ui';
@@ -40,6 +40,94 @@ function RendaDoMes() {
         <Legenda cor="bg-emerald-100" rotulo="Livre" valor={formatarBRL(Math.max(0, saldoPrevisto))} />
       </div>
     </Painel>
+  );
+}
+
+function EvolucaoGastos() {
+  const { evolucaoMensal, mesSelecionado, setMesSelecionado } = useFinance();
+  const { mesAnteriorKey, gastoAnterior, diferenca, percentual, melhorou, historicoMeses, comparativoCategorias } = evolucaoMensal;
+
+  const maxValor = Math.max(...historicoMeses.map((m) => m.totalGasto), 1);
+  const maiorEconomia = comparativoCategorias.find((c) => c.diff < 0);
+  const maiorAumento = [...comparativoCategorias].reverse().find((c) => c.diff > 0);
+
+  return (
+    <section>
+      <SecaoTitulo titulo="Evolução dos gastos" />
+      <Painel>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold text-slate-500">
+              Comparado a {nomeDoMes(mesAnteriorKey)} ({formatarBRL(gastoAnterior)})
+            </p>
+            <p className="mt-1 text-lg font-extrabold text-slate-900">
+              {gastoAnterior === 0
+                ? 'Sem histórico no mês anterior'
+                : melhorou
+                ? `Vocês economizaram ${formatarBRL(Math.abs(diferenca))}`
+                : `Gastos subiram ${formatarBRL(diferenca)}`}
+            </p>
+          </div>
+          {gastoAnterior > 0 && (
+            <Chip tom={melhorou ? 'ok' : 'perigo'}>
+              {melhorou ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
+              {diferenca > 0 ? '+' : ''}
+              {percentual}%
+            </Chip>
+          )}
+        </div>
+
+        {/* Gráfico de barras dos últimos 6 meses (clicável para navegar no mês) */}
+        <div className="mt-5 grid grid-cols-6 items-end gap-2 pt-2">
+          {historicoMeses.map((m) => {
+            const alturaPct = Math.max(8, Math.round((m.totalGasto / maxValor) * 100));
+            const selecionado = m.mesKey === mesSelecionado;
+            const rotuloMes = nomeDoMes(m.mesKey).slice(0, 3);
+            return (
+              <button
+                key={m.mesKey}
+                type="button"
+                onClick={() => setMesSelecionado(m.mesKey)}
+                className="group flex flex-col items-center gap-1.5 text-center focus:outline-none"
+                title={`${nomeDoMes(m.mesKey)}: ${formatarBRL(m.totalGasto)}`}
+              >
+                <span className="text-[10px] font-bold tabular-nums text-slate-500">
+                  {m.totalGasto > 0 ? `${Math.round(m.totalGasto / 100) / 10}k` : '—'}
+                </span>
+                <div className="flex h-24 w-full items-end justify-center rounded-lg bg-slate-100 p-1">
+                  <div
+                    className={`w-full rounded-md transition-all ${
+                      selecionado ? 'bg-brand-600' : 'bg-brand-300 group-hover:bg-brand-400'
+                    }`}
+                    style={{ height: `${alturaPct}%` }}
+                  />
+                </div>
+                <span className={`text-xs capitalize ${selecionado ? 'font-extrabold text-brand-700' : 'font-medium text-slate-600'}`}>
+                  {rotuloMes}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {(maiorEconomia || maiorAumento) && (
+          <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
+            {maiorEconomia && (
+              <p className="text-emerald-700">
+                <strong>Maior economia:</strong> {maiorEconomia.categoria.emoji} {maiorEconomia.categoria.nome} (
+                {formatarBRL(Math.abs(maiorEconomia.diff))} a menos)
+              </p>
+            )}
+            {maiorAumento && (
+              <p className="text-rose-600">
+                <strong>Maior alta:</strong> {maiorAumento.categoria.emoji} {maiorAumento.categoria.nome} (+
+                {formatarBRL(maiorAumento.diff)})
+              </p>
+            )}
+          </div>
+        )}
+      </Painel>
+    </section>
   );
 }
 
@@ -184,6 +272,7 @@ export default function Dashboard() {
     <div className="space-y-7">
       <h1 className="text-2xl font-extrabold text-slate-900">Olá, {getPessoa(perfilAtivo)?.nome}</h1>
       <RendaDoMes />
+      <EvolucaoGastos />
       <ResumoAcerto />
       <ProximosVencimentos />
       <OrcamentosEmAlerta />
