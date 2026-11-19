@@ -54,221 +54,281 @@ function RendaDoMes() {
   );
 }
 
+function listarIntervaloMeses(inicioKey, fimKey) {
+  if (inicioKey > fimKey) return [inicioKey];
+  const lista = [];
+  let atual = inicioKey;
+  let trava = 0;
+  while (atual <= fimKey && trava < 24) {
+    lista.push(atual);
+    atual = somarMesesMesKey(atual, 1);
+    trava++;
+  }
+  return lista;
+}
+
 function EvolucaoGastos() {
   const { lancamentos, rendas, categorias, mesSelecionado, setMesSelecionado } = useFinance();
 
-  // Controla a janela de 6 meses exibida no gráfico (permite navegar para frente e para trás)
-  const [mesFimJanela, setMesFimJanela] = useState(mesSelecionado);
-  // Controla qual mês está sendo usado como base de comparação (padrão: mês anterior ao selecionado)
-  const [mesComparacao, setMesComparacao] = useState(() => somarMesesMesKey(mesSelecionado, -1));
+  // Intervalo padrão: últimos 6 meses terminando no mês selecionado
+  const [mesInicio, setMesInicio] = useState(() => somarMesesMesKey(mesSelecionado, -5));
+  const [mesFim, setMesFim] = useState(mesSelecionado);
 
   useEffect(() => {
-    setMesFimJanela(mesSelecionado);
-    setMesComparacao(somarMesesMesKey(mesSelecionado, -1));
+    setMesInicio(somarMesesMesKey(mesSelecionado, -5));
+    setMesFim(mesSelecionado);
   }, [mesSelecionado]);
 
-  // Opções disponíveis no filtro de comparação (12 meses para trás até 6 meses para frente)
-  const opcoesMesesComparacao = useMemo(() => {
+  // Opções para os selects (18 meses para trás até 6 meses para frente)
+  const opcoesMeses = useMemo(() => {
     const opcoes = [];
-    for (let offset = -12; offset <= 6; offset++) {
-      if (offset === 0) continue;
+    for (let offset = -18; offset <= 6; offset++) {
       opcoes.push(somarMesesMesKey(mesSelecionado, offset));
     }
     return opcoes;
   }, [mesSelecionado]);
 
-  // Cálculo dinâmico entre o mês ativo e o mês escolhido no filtro
-  const comparativo = useMemo(() => {
-    const resumoAtual = calcularResumoMensal(lancamentos, rendas, mesSelecionado);
-    const resumoBase = calcularResumoMensal(lancamentos, rendas, mesComparacao);
+  function handleChangeInicio(novoInicio) {
+    setMesInicio(novoInicio);
+    if (novoInicio > mesFim) {
+      setMesFim(novoInicio);
+    }
+  }
 
-    const gastoAtual = resumoAtual.totalPrevisto;
-    const gastoBase = resumoBase.totalPrevisto;
-    const diferenca = arredondar(gastoAtual - gastoBase);
-    const percentual = gastoBase > 0 ? arredondar((diferenca / gastoBase) * 100, 1) : 0;
+  function handleChangeFim(novoFim) {
+    setMesFim(novoFim);
+    if (novoFim < mesInicio) {
+      setMesInicio(novoFim);
+    }
+  }
 
-    const gastosAtualCat = calcularGastosPorCategoria(lancamentos, mesSelecionado);
-    const gastosBaseCat = calcularGastosPorCategoria(lancamentos, mesComparacao);
+  function moverIntervalo(direcao) {
+    setMesInicio((prev) => somarMesesMesKey(prev, direcao));
+    setMesFim((prev) => somarMesesMesKey(prev, direcao));
+  }
 
-    const porCategoria = categorias
-      .map((cat) => {
-        const atual = gastosAtualCat[cat.id]?.previsto ?? 0;
-        const base = gastosBaseCat[cat.id]?.previsto ?? 0;
-        return { categoria: cat, atual, base, diff: arredondar(atual - base) };
-      })
-      .filter((item) => item.atual > 0 || item.base > 0)
-      .sort((a, b) => a.diff - b.diff);
-
-    return {
-      gastoAtual,
-      gastoBase,
-      diferenca,
-      percentual,
-      melhorou: diferenca <= 0,
-      maiorEconomia: porCategoria.find((c) => c.diff < 0),
-      maiorAumento: [...porCategoria].reverse().find((c) => c.diff > 0),
-    };
-  }, [lancamentos, rendas, categorias, mesSelecionado, mesComparacao]);
-
-  // Lista de 6 meses da janela visível no gráfico
-  const mesesJanela = useMemo(() => {
-    return [-5, -4, -3, -2, -1, 0].map((offset) => {
-      const mk = somarMesesMesKey(mesFimJanela, offset);
+  // Dados de cada mês dentro do intervalo [mesInicio .. mesFim]
+  const mesesIntervalo = useMemo(() => {
+    return listarIntervaloMeses(mesInicio, mesFim).map((mk) => {
       const r = calcularResumoMensal(lancamentos, rendas, mk);
       return {
         mesKey: mk,
         totalGasto: r.totalPrevisto,
       };
     });
-  }, [lancamentos, rendas, mesFimJanela]);
+  }, [lancamentos, rendas, mesInicio, mesFim]);
 
-  const maxValor = Math.max(...mesesJanela.map((m) => m.totalGasto), 1);
+  // Métricas consolidadas do intervalo e variação entre o 1º e o último mês selecionados
+  const resumoIntervalo = useMemo(() => {
+    const totalPeriodo = arredondar(mesesIntervalo.reduce((acc, m) => acc + m.totalGasto, 0));
+    const qtdMeses = mesesIntervalo.length || 1;
+    const mediaMensal = arredondar(totalPeriodo / qtdMeses);
+
+    const primeiro = mesesIntervalo[0];
+    const ultimo = mesesIntervalo[mesesIntervalo.length - 1];
+    const gastoPrimeiro = primeiro?.totalGasto ?? 0;
+    const gastoUltimo = ultimo?.totalGasto ?? 0;
+    const diferenca = arredondar(gastoUltimo - gastoPrimeiro);
+    const percentual = gastoPrimeiro > 0 ? arredondar((diferenca / gastoPrimeiro) * 100, 1) : 0;
+
+    // Comparativo por categoria entre o mês inicial ("De") e o mês final ("Até")
+    const gastosInicioCat = calcularGastosPorCategoria(lancamentos, mesInicio);
+    const gastosFimCat = calcularGastosPorCategoria(lancamentos, mesFim);
+
+    const porCategoria = categorias
+      .map((cat) => {
+        const inicioVal = gastosInicioCat[cat.id]?.previsto ?? 0;
+        const fimVal = gastosFimCat[cat.id]?.previsto ?? 0;
+        return { categoria: cat, inicioVal, fimVal, diff: arredondar(fimVal - inicioVal) };
+      })
+      .filter((item) => item.inicioVal > 0 || item.fimVal > 0)
+      .sort((a, b) => a.diff - b.diff);
+
+    return {
+      totalPeriodo,
+      mediaMensal,
+      qtdMeses,
+      gastoPrimeiro,
+      gastoUltimo,
+      diferenca,
+      percentual,
+      melhorou: diferenca <= 0,
+      maiorEconomia: porCategoria.find((c) => c.diff < 0),
+      maiorAumento: [...porCategoria].reverse().find((c) => c.diff > 0),
+    };
+  }, [mesesIntervalo, lancamentos, categorias, mesInicio, mesFim]);
+
+  const maxValor = Math.max(...mesesIntervalo.map((m) => m.totalGasto), 1);
   const capitalizar = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const mesmoMes = mesInicio === mesFim;
 
   return (
     <section>
       <SecaoTitulo titulo="Evolução dos gastos" />
       <Painel corBarra="amarelo" tituloJanela="Evolucao_Gastos.chart">
-        {/* Filtro para escolher qual mês comparar */}
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border-[1.5px] border-[#1E1B18] bg-[#F3EFE6] px-2.5 py-2">
-          <label htmlFor="filtro-comparacao-mes" className="font-mono text-xs font-extrabold uppercase text-[#1E1B18]">
-            Comparar com:
-          </label>
-          <select
-            id="filtro-comparacao-mes"
-            value={mesComparacao}
-            onChange={(e) => setMesComparacao(e.target.value)}
-            className="rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] px-2.5 py-1 text-xs font-extrabold text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] focus:bg-[#FEFCE8] focus:outline-none"
-          >
-            {opcoesMesesComparacao.map((mk) => (
-              <option key={mk} value={mk}>
-                {capitalizar(nomeDoMes(mk))}
-              </option>
-            ))}
-          </select>
+        {/* Filtro de período: De [Mês] Até [Mês] */}
+        <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg border-[1.5px] border-[#1E1B18] bg-[#F3EFE6] p-2.5">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="filtro-mes-de" className="font-mono text-[11px] font-extrabold uppercase text-[#1E1B18]">
+              De:
+            </label>
+            <select
+              id="filtro-mes-de"
+              value={mesInicio}
+              onChange={(e) => handleChangeInicio(e.target.value)}
+              className="w-full rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] px-2 py-1 text-xs font-extrabold text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] focus:bg-[#FEFCE8] focus:outline-none"
+            >
+              {opcoesMeses.map((mk) => (
+                <option key={mk} value={mk}>
+                  {capitalizar(nomeDoMes(mk))}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="filtro-mes-ate" className="font-mono text-[11px] font-extrabold uppercase text-[#1E1B18]">
+              Até:
+            </label>
+            <select
+              id="filtro-mes-ate"
+              value={mesFim}
+              onChange={(e) => handleChangeFim(e.target.value)}
+              className="w-full rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] px-2 py-1 text-xs font-extrabold text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] focus:bg-[#FEFCE8] focus:outline-none"
+            >
+              {opcoesMeses.map((mk) => (
+                <option key={mk} value={mk}>
+                  {capitalizar(nomeDoMes(mk))}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Resultado da comparação */}
+        {/* Resumo numérico do intervalo selecionado */}
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-xs font-semibold text-stone-600">
-              {capitalizar(nomeDoMes(mesSelecionado))} ({formatarBRL(comparativo.gastoAtual)}) vs{' '}
-              {nomeDoMes(mesComparacao)} ({formatarBRL(comparativo.gastoBase)})
+              {mesmoMes
+                ? `Total em ${nomeDoMes(mesInicio)}`
+                : `Total em ${resumoIntervalo.qtdMeses} meses (${nomeDoMes(mesInicio).slice(0, 3)} a ${nomeDoMes(mesFim).slice(0, 3)})`}
             </p>
-            <p className="mt-1 text-lg font-extrabold text-[#1E1B18]">
-              {comparativo.gastoBase === 0
-                ? `Sem gastos registrados em ${nomeDoMes(mesComparacao)}`
-                : comparativo.diferenca === 0
-                ? 'Mesmo patamar de gastos'
-                : comparativo.melhorou
-                ? `Vocês economizaram ${formatarBRL(Math.abs(comparativo.diferenca))}`
-                : `Gastos subiram ${formatarBRL(comparativo.diferenca)}`}
+            <p className="mt-0.5 text-xl font-extrabold tabular-nums text-[#1E1B18]">
+              {formatarBRL(resumoIntervalo.totalPeriodo)}
+              {!mesmoMes && (
+                <span className="ml-2 text-xs font-bold text-stone-600">
+                  (média {formatarBRL(resumoIntervalo.mediaMensal)}/mês)
+                </span>
+              )}
             </p>
+            {!mesmoMes && resumoIntervalo.gastoPrimeiro > 0 && (
+              <p className="mt-0.5 text-xs font-semibold text-stone-700">
+                {resumoIntervalo.diferenca === 0
+                  ? `Mesmo valor entre ${nomeDoMes(mesInicio)} e ${nomeDoMes(mesFim)}`
+                  : resumoIntervalo.melhorou
+                  ? `Redução de ${formatarBRL(Math.abs(resumoIntervalo.diferenca))} de ${nomeDoMes(mesInicio).slice(0, 3)} para ${nomeDoMes(mesFim).slice(0, 3)}`
+                  : `Aumento de ${formatarBRL(resumoIntervalo.diferenca)} de ${nomeDoMes(mesInicio).slice(0, 3)} para ${nomeDoMes(mesFim).slice(0, 3)}`}
+              </p>
+            )}
           </div>
-          {comparativo.gastoBase > 0 && (
-            <Chip tom={comparativo.melhorou ? 'ok' : 'perigo'}>
-              {comparativo.melhorou ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
-              {comparativo.diferenca > 0 ? '+' : ''}
-              {comparativo.percentual}%
+
+          {!mesmoMes && resumoIntervalo.gastoPrimeiro > 0 && (
+            <Chip tom={resumoIntervalo.melhorou ? 'ok' : 'perigo'}>
+              {resumoIntervalo.melhorou ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
+              {resumoIntervalo.diferenca > 0 ? '+' : ''}
+              {resumoIntervalo.percentual}%
             </Chip>
           )}
         </div>
 
-        {/* Barra de navegação para andar para frente ou para trás nos meses do gráfico */}
+        {/* Botões para deslizar o intervalo para trás ou para frente */}
         <div className="mt-4 flex items-center justify-between border-t-[1.5px] border-dashed border-[#1E1B18]/25 pt-3">
           <button
             type="button"
-            onClick={() => setMesFimJanela((prev) => somarMesesMesKey(prev, -1))}
-            className="inline-flex items-center gap-1 rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] px-2 py-1 text-xs font-extrabold text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] hover:bg-[#FDE68A]"
-            aria-label="Ver meses anteriores"
+            onClick={() => moverIntervalo(-1)}
+            className="inline-flex items-center gap-1 rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] px-2.5 py-1 text-xs font-extrabold text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] hover:bg-[#FDE68A]"
+            aria-label="Recuar período em 1 mês"
           >
-            <ChevronLeft size={14} /> Anteriores
+            <ChevronLeft size={14} /> Anterior
           </button>
 
           <span className="font-mono text-[11px] font-bold text-stone-600">
-            {nomeDoMes(mesesJanela[0].mesKey).slice(0, 3)} – {nomeDoMes(mesesJanela[5].mesKey).slice(0, 3)}
+            {mesmoMes
+              ? nomeDoMes(mesInicio)
+              : `${nomeDoMes(mesInicio).slice(0, 3)} – ${nomeDoMes(mesFim).slice(0, 3)}`}
           </span>
 
           <button
             type="button"
-            onClick={() => setMesFimJanela((prev) => somarMesesMesKey(prev, 1))}
-            className="inline-flex items-center gap-1 rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] px-2 py-1 text-xs font-extrabold text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] hover:bg-[#FDE68A]"
-            aria-label="Ver próximos meses"
+            onClick={() => moverIntervalo(1)}
+            className="inline-flex items-center gap-1 rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] px-2.5 py-1 text-xs font-extrabold text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] hover:bg-[#FDE68A]"
+            aria-label="Avançar período em 1 mês"
           >
-            Próximos <ChevronRight size={14} />
+            Próximo <ChevronRight size={14} />
           </button>
         </div>
 
-        {/* Gráfico de barras dos 6 meses visíveis */}
-        <div className="mt-3 grid grid-cols-6 items-end gap-2">
-          {mesesJanela.map((m) => {
-            const alturaPct = Math.max(8, Math.round((m.totalGasto / maxValor) * 100));
-            const ehAtual = m.mesKey === mesSelecionado;
-            const ehBaseComparacao = m.mesKey === mesComparacao;
-            const rotuloMes = nomeDoMes(m.mesKey).slice(0, 3);
+        {/* Gráfico de barras adaptável ao número de meses do intervalo */}
+        <div className="mt-3 overflow-x-auto pb-1">
+          <div
+            className="grid items-end gap-2"
+            style={{
+              gridTemplateColumns: `repeat(${mesesIntervalo.length}, minmax(42px, 1fr))`,
+            }}
+          >
+            {mesesIntervalo.map((m) => {
+              const alturaPct = Math.max(8, Math.round((m.totalGasto / maxValor) * 100));
+              const ehMesAtivoApp = m.mesKey === mesSelecionado;
+              const rotuloMes = nomeDoMes(m.mesKey).slice(0, 3);
+              const anoCurto = m.mesKey.slice(2, 4);
 
-            return (
-              <button
-                key={m.mesKey}
-                type="button"
-                onClick={() => setMesSelecionado(m.mesKey)}
-                className="group flex flex-col items-center gap-1 text-center focus:outline-none"
-                title={`Selecionar ${nomeDoMes(m.mesKey)}: ${formatarBRL(m.totalGasto)}`}
-              >
-                <span className="text-[10px] font-extrabold tabular-nums text-stone-600">
-                  {m.totalGasto > 0 ? `${Math.round(m.totalGasto / 100) / 10}k` : '—'}
-                </span>
-                <div className="flex h-24 w-full items-end justify-center rounded-md border-[1.5px] border-[#1E1B18] bg-[#F3EFE6] p-1">
-                  <div
-                    className={`w-full rounded-[2px] border border-[#1E1B18] transition-all ${
-                      ehAtual
-                        ? 'bg-[#C4B5FD]'
-                        : ehBaseComparacao
-                        ? 'bg-[#FDE68A]'
-                        : 'bg-[#BAE6FD] group-hover:bg-[#93C5FD]'
-                    }`}
-                    style={{ height: `${alturaPct}%` }}
-                  />
-                </div>
-                <span
-                  className={`rounded px-1 text-[11px] capitalize ${
-                    ehAtual
-                      ? 'bg-[#DDD6FE] font-extrabold text-[#1E1B18]'
-                      : ehBaseComparacao
-                      ? 'bg-[#FDE68A] font-extrabold text-[#1E1B18]'
-                      : 'font-semibold text-stone-600'
-                  }`}
+              return (
+                <button
+                  key={m.mesKey}
+                  type="button"
+                  onClick={() => setMesSelecionado(m.mesKey)}
+                  className="group flex flex-col items-center gap-1 text-center focus:outline-none"
+                  title={`Abrir ${nomeDoMes(m.mesKey)}: ${formatarBRL(m.totalGasto)}`}
                 >
-                  {rotuloMes}
-                </span>
-              </button>
-            );
-          })}
+                  <span className="text-[10px] font-extrabold tabular-nums text-stone-600">
+                    {m.totalGasto > 0 ? `${Math.round(m.totalGasto / 100) / 10}k` : '—'}
+                  </span>
+                  <div className="flex h-24 w-full items-end justify-center rounded-md border-[1.5px] border-[#1E1B18] bg-[#F3EFE6] p-1">
+                    <div
+                      className={`w-full rounded-[2px] border border-[#1E1B18] transition-all ${
+                        ehMesAtivoApp ? 'bg-[#C4B5FD]' : 'bg-[#BAE6FD] group-hover:bg-[#FDE68A]'
+                      }`}
+                      style={{ height: `${alturaPct}%` }}
+                    />
+                  </div>
+                  <span
+                    className={`rounded px-1 text-[10px] capitalize ${
+                      ehMesAtivoApp ? 'bg-[#DDD6FE] font-extrabold text-[#1E1B18]' : 'font-bold text-stone-700'
+                    }`}
+                  >
+                    {rotuloMes}/{anoCurto}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Legenda de cores do gráfico */}
-        <div className="mt-2.5 flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-stone-600">
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm border border-[#1E1B18] bg-[#C4B5FD]" /> Mês ativo
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm border border-[#1E1B18] bg-[#FDE68A]" /> Comparado
-          </span>
-        </div>
-
-        {/* Destaques por categoria */}
-        {(comparativo.maiorEconomia || comparativo.maiorAumento) && (
+        {/* Destaques por categoria entre o mês inicial e o final */}
+        {!mesmoMes && (resumoIntervalo.maiorEconomia || resumoIntervalo.maiorAumento) && (
           <div className="mt-3 space-y-1.5 border-t-[1.5px] border-[#1E1B18]/15 pt-3 text-xs">
-            {comparativo.maiorEconomia && (
+            {resumoIntervalo.maiorEconomia && (
               <p className="font-semibold text-emerald-800">
-                <strong>Maior economia:</strong> {comparativo.maiorEconomia.categoria.emoji}{' '}
-                {comparativo.maiorEconomia.categoria.nome} ({formatarBRL(Math.abs(comparativo.maiorEconomia.diff))} a menos)
+                <strong>Maior queda ({nomeDoMes(mesInicio).slice(0, 3)} → {nomeDoMes(mesFim).slice(0, 3)}):</strong>{' '}
+                {resumoIntervalo.maiorEconomia.categoria.emoji} {resumoIntervalo.maiorEconomia.categoria.nome} (
+                {formatarBRL(Math.abs(resumoIntervalo.maiorEconomia.diff))} a menos)
               </p>
             )}
-            {comparativo.maiorAumento && (
+            {resumoIntervalo.maiorAumento && (
               <p className="font-semibold text-rose-700">
-                <strong>Maior alta:</strong> {comparativo.maiorAumento.categoria.emoji}{' '}
-                {comparativo.maiorAumento.categoria.nome} (+{formatarBRL(comparativo.maiorAumento.diff)})
+                <strong>Maior alta ({nomeDoMes(mesInicio).slice(0, 3)} → {nomeDoMes(mesFim).slice(0, 3)}):</strong>{' '}
+                {resumoIntervalo.maiorAumento.categoria.emoji} {resumoIntervalo.maiorAumento.categoria.nome} (+
+                {formatarBRL(resumoIntervalo.maiorAumento.diff)})
               </p>
             )}
           </div>
