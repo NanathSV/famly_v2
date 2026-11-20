@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Camera, Check, Clock, FileText, Plus, RefreshCw, Sparkles, Upload } from 'lucide-react';
+import { Camera, Check, Clock, FileText, Pencil, Plus, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-react';
 import LancamentoForm from '../components/LancamentoForm';
-import { Avatar, Botao, Campo, Chip, EstadoVazio, Painel, Sheet, classeInput } from '../components/ui';
+import { Avatar, Botao, Campo, Chip, EstadoVazio, Painel, Segmented, Sheet, classeInput } from '../components/ui';
 import { useFinance } from '../context/FinanceContext';
 import { formatarBRL, formatarData, hojeISO, mesKeyDe, nomeDoMes, parseBRL, somarValores } from '../utils/calculations';
 
@@ -26,6 +26,9 @@ export default function Lancamentos() {
     marcarComoPago,
     marcarComoPendente,
     gerarRecorrentesDoMes,
+    adicionarContaRecorrente,
+    atualizarContaRecorrente,
+    excluirContaRecorrente,
   } = useFinance();
 
   const [filtro, setFiltro] = useState('todos');
@@ -34,6 +37,10 @@ export default function Lancamentos() {
   const [modalImportarAberto, setModalImportarAberto] = useState(false);
   const [mostrarRecorrentes, setMostrarRecorrentes] = useState(false);
   const [avisoRecorrentes, setAvisoRecorrentes] = useState('');
+
+  // Estados para criar / editar contas fixas recorrentes
+  const [modalNovaFixaAberto, setModalNovaFixaAberto] = useState(false);
+  const [fixaEmEdicao, setFixaEmEdicao] = useState(null);
 
   const dataPadrao = useMemo(() => {
     const hoje = hojeISO();
@@ -79,8 +86,8 @@ export default function Lancamentos() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">Lançamentos</h1>
-          <p className="text-sm text-slate-500">{listaFiltrada.length} registro(s) em {nomeDoMes(mesSelecionado)}</p>
+          <h1 className="text-2xl font-extrabold text-[#1E1B18]">Lançamentos</h1>
+          <p className="text-sm text-stone-600">{listaFiltrada.length} registro(s) em {nomeDoMes(mesSelecionado)}</p>
         </div>
         <div className="flex items-center gap-2">
           <Botao variante="secundario" tamanho="sm" onClick={() => setModalImportarAberto(true)}>
@@ -92,52 +99,103 @@ export default function Lancamentos() {
         </div>
       </div>
 
-      <Painel className="bg-slate-50/70">
+      <Painel corBarra="azul" tituloJanela="Contas_Fixas.sys">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <RefreshCw size={18} className="text-brand-600" />
+            <RefreshCw size={18} className="text-[#1E1B18]" />
             <div>
-              <p className="text-sm font-bold text-slate-900">Contas fixas recorrentes</p>
-              <p className="text-xs text-slate-600">
+              <p className="text-sm font-extrabold text-[#1E1B18]">Contas fixas recorrentes</p>
+              <p className="text-xs text-stone-600">
                 {recorrentesPendentesDeGerar.length > 0
                   ? `${recorrentesPendentesDeGerar.length} conta(s) ainda não lançada(s) neste mês.`
                   : 'Todas as contas recorrentes ativas já estão no mês.'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {recorrentesPendentesDeGerar.length > 0 && (
               <Botao tamanho="sm" onClick={handleGerarRecorrentes}>Gerar no mês</Botao>
             )}
-            <Botao variante="fantasma" tamanho="sm" onClick={() => setMostrarRecorrentes((v) => !v)}>
-              {mostrarRecorrentes ? 'Ocultar lista' : 'Ver fixas'}
+            <Botao variante="suave" tamanho="sm" onClick={() => setModalNovaFixaAberto(true)}>
+              <Plus size={14} /> Nova fixa
+            </Botao>
+            <Botao variante="secundario" tamanho="sm" onClick={() => setMostrarRecorrentes((v) => !v)}>
+              {mostrarRecorrentes ? 'Ocultar lista' : `Ver fixas (${contasRecorrentes.length})`}
             </Botao>
           </div>
         </div>
 
         {avisoRecorrentes && (
-          <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">{avisoRecorrentes}</p>
+          <p className="mt-2 rounded-lg border-[1.5px] border-[#1E1B18] bg-[#BBF7D0] px-3 py-2 text-xs font-extrabold text-[#1E1B18]">
+            {avisoRecorrentes}
+          </p>
         )}
 
         {mostrarRecorrentes && (
-          <ul className="mt-3 divide-y divide-slate-200 border-t border-slate-200 pt-2">
-            {contasRecorrentes.map((rec) => {
-              const cat = getCategoria(rec.categoriaId);
-              const jaGerada = lancamentosDoMes.some((l) => l.recorrenteId === rec.id);
-              return (
-                <li key={rec.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-slate-800">{cat?.emoji} {rec.descricao}</p>
-                    <p className="text-xs text-slate-500">Dia {rec.diaVencimento} • {rec.formaPagamento}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold tabular-nums text-slate-900">{formatarBRL(rec.valor)}</span>
-                    <Chip tom={jaGerada ? 'ok' : 'neutro'}>{jaGerada ? 'No mês' : 'Pendente'}</Chip>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="mt-3 border-t-2 border-dashed border-[#1E1B18]/20 pt-2">
+            {contasRecorrentes.length === 0 ? (
+              <p className="py-3 text-center text-xs font-semibold text-stone-600">
+                Nenhuma conta fixa cadastrada ainda. Clique em <strong>+ Nova fixa</strong> para adicionar.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[#1E1B18]/15">
+                {contasRecorrentes.map((rec) => {
+                  const cat = getCategoria(rec.categoriaId);
+                  const jaGerada = lancamentosDoMes.some((l) => l.recorrenteId === rec.id);
+                  const ativa = rec.ativa !== false;
+                  return (
+                    <li
+                      key={rec.id}
+                      onClick={() => setFixaEmEdicao(rec)}
+                      className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-2.5 text-sm transition-colors hover:bg-[#F3EFE6]"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className={`truncate font-extrabold ${ativa ? 'text-[#1E1B18]' : 'text-stone-400 line-through'}`}>
+                            {cat?.emoji} {rec.descricao}
+                          </p>
+                          {rec.pertenceCasa !== false && <Chip tom="marca">Casa</Chip>}
+                        </div>
+                        <p className="mt-0.5 text-xs text-stone-600">
+                          Dia {rec.diaVencimento} • {rec.formaPagamento}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="mr-1 font-extrabold tabular-nums text-[#1E1B18]">{formatarBRL(rec.valor)}</span>
+                        <Chip tom={jaGerada ? 'ok' : 'neutro'}>{jaGerada ? 'No mês' : 'Pendente'}</Chip>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFixaEmEdicao(rec);
+                          }}
+                          className="rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] p-1.5 text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] hover:bg-[#FDE68A]"
+                          title="Editar conta fixa"
+                          aria-label={`Editar ${rec.descricao}`}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Excluir a conta fixa "${rec.descricao}"?`)) {
+                              excluirContaRecorrente(rec.id);
+                            }
+                          }}
+                          className="rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] p-1.5 text-[#1E1B18] shadow-[1.5px_1.5px_0_#1E1B18] hover:bg-[#FDA4AF]"
+                          title="Excluir conta fixa"
+                          aria-label={`Excluir ${rec.descricao}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         )}
       </Painel>
 
@@ -147,8 +205,10 @@ export default function Lancamentos() {
             key={f.id}
             type="button"
             onClick={() => setFiltro(f.id)}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-              filtro === f.id ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50'
+            className={`shrink-0 rounded-full border-2 border-[#1E1B18] px-3.5 py-1 text-xs font-extrabold transition-all ${
+              filtro === f.id
+                ? 'bg-[#DDD6FE] text-[#1E1B18] shadow-[2px_2px_0_#1E1B18]'
+                : 'bg-[#FFFDF9] text-stone-700 hover:bg-[#FDE68A]'
             }`}
           >
             {f.rotulo}
@@ -156,18 +216,18 @@ export default function Lancamentos() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 rounded-2xl bg-white p-3 text-center ring-1 ring-slate-200">
+      <div className="grid grid-cols-3 gap-2 rounded-xl border-2 border-[#1E1B18] bg-[#FFFDF9] p-3 text-center shadow-[4px_4px_0_#1E1B18]">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pagos</p>
+          <p className="font-mono text-[11px] font-extrabold uppercase tracking-wide text-stone-600">Pagos</p>
           <p className="mt-0.5 text-sm font-extrabold tabular-nums text-emerald-700">{formatarBRL(totaisFiltro.pagos)}</p>
         </div>
-        <div className="border-x border-slate-100">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">A pagar</p>
+        <div className="border-x-2 border-[#1E1B18]/15">
+          <p className="font-mono text-[11px] font-extrabold uppercase tracking-wide text-stone-600">A pagar</p>
           <p className="mt-0.5 text-sm font-extrabold tabular-nums text-amber-700">{formatarBRL(totaisFiltro.pendentes)}</p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
-          <p className="mt-0.5 text-sm font-extrabold tabular-nums text-slate-900">{formatarBRL(totaisFiltro.total)}</p>
+          <p className="font-mono text-[11px] font-extrabold uppercase tracking-wide text-stone-600">Total</p>
+          <p className="mt-0.5 text-sm font-extrabold tabular-nums text-[#1E1B18]">{formatarBRL(totaisFiltro.total)}</p>
         </div>
       </div>
 
@@ -179,49 +239,54 @@ export default function Lancamentos() {
           acao={<Botao onClick={() => setModalNovoAberto(true)}><Plus size={16} /> Adicionar lançamento</Botao>}
         />
       ) : (
-        <ul className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200">
-          {listaFiltrada.map((item) => {
-            const cat = getCategoria(item.categoriaId);
-            const pago = item.status === 'Pago';
-            return (
-              <li
-                key={item.id}
-                onClick={() => setLancamentoEmEdicao(item)}
-                className="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xl">{cat?.emoji ?? '💸'}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="truncate text-sm font-bold text-slate-900">{item.descricao}</p>
-                    {item.pertenceCasa && <Chip tom="marca">Casa</Chip>}
+        <Painel corBarra="lilas" tituloJanela="Registros_Mes.dat" className="!p-0">
+          <ul className="-m-4 divide-y-2 divide-[#1E1B18]/15">
+            {listaFiltrada.map((item) => {
+              const cat = getCategoria(item.categoriaId);
+              const pago = item.status === 'Pago';
+              return (
+                <li
+                  key={item.id}
+                  onClick={() => setLancamentoEmEdicao(item)}
+                  className="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-[#F3EFE6]/70"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-[#1E1B18] bg-[#F3EFE6] text-xl">
+                    {cat?.emoji ?? '💸'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-extrabold text-[#1E1B18]">{item.descricao}</p>
+                      {item.pertenceCasa && <Chip tom="marca">Casa</Chip>}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-600">
+                      <span>{formatarData(item.data)}</span>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Avatar pessoaId={item.pagoPor} tamanho="sm" />
+                        {item.formaPagamento}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span>{formatarData(item.data)}</span>
-                    <span>•</span>
-                    <span className="inline-flex items-center gap-1">
-                      <Avatar pessoaId={item.pagoPor} tamanho="sm" />
-                      {item.formaPagamento}
-                    </span>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <span className="text-sm font-extrabold tabular-nums text-[#1E1B18]">{formatarBRL(item.valor)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => alternarStatus(e, item)}
+                      className={`inline-flex items-center gap-1 rounded-full border-[1.5px] border-[#1E1B18] px-2.5 py-0.5 text-xs font-bold shadow-[1.5px_1.5px_0_#1E1B18] transition-colors ${
+                        pago ? 'bg-[#BBF7D0] text-[#1E1B18] hover:bg-[#86EFAC]' : 'bg-[#FDE68A] text-[#1E1B18] hover:bg-[#FCD34D]'
+                      }`}
+                    >
+                      {pago ? <><Check size={12} /> Pago</> : <><Clock size={12} /> Pendente</>}
+                    </button>
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-1.5">
-                  <span className="text-sm font-extrabold tabular-nums text-slate-900">{formatarBRL(item.valor)}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => alternarStatus(e, item)}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors ${
-                      pago ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
-                    }`}
-                  >
-                    {pago ? <><Check size={12} /> Pago</> : <><Clock size={12} /> Pendente</>}
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </Painel>
       )}
 
+      {/* Modal: Novo Lançamento */}
       <Sheet aberto={modalNovoAberto} aoFechar={() => setModalNovoAberto(false)} titulo="Novo lançamento">
         <LancamentoForm
           inicial={null}
@@ -231,6 +296,7 @@ export default function Lancamentos() {
         />
       </Sheet>
 
+      {/* Modal: Editar Lançamento */}
       <Sheet aberto={Boolean(lancamentoEmEdicao)} aoFechar={() => setLancamentoEmEdicao(null)} titulo="Editar lançamento">
         {lancamentoEmEdicao && (
           <LancamentoForm
@@ -243,6 +309,39 @@ export default function Lancamentos() {
         )}
       </Sheet>
 
+      {/* Modal: Nova Conta Fixa Recorrente */}
+      <Sheet aberto={modalNovaFixaAberto} aoFechar={() => setModalNovaFixaAberto(false)} titulo="Nova conta fixa">
+        <ContaRecorrenteForm
+          inicial={null}
+          perfilAtivo={perfilAtivo}
+          aoSalvar={(dados) => {
+            adicionarContaRecorrente(dados);
+            setModalNovaFixaAberto(false);
+            setMostrarRecorrentes(true);
+          }}
+          aoCancelar={() => setModalNovaFixaAberto(false)}
+        />
+      </Sheet>
+
+      {/* Modal: Editar Conta Fixa Recorrente */}
+      <Sheet aberto={Boolean(fixaEmEdicao)} aoFechar={() => setFixaEmEdicao(null)} titulo="Editar conta fixa">
+        {fixaEmEdicao && (
+          <ContaRecorrenteForm
+            inicial={fixaEmEdicao}
+            perfilAtivo={perfilAtivo}
+            aoSalvar={(dados) => {
+              atualizarContaRecorrente(fixaEmEdicao.id, dados);
+              setFixaEmEdicao(null);
+            }}
+            aoExcluir={() => {
+              excluirContaRecorrente(fixaEmEdicao.id);
+              setFixaEmEdicao(null);
+            }}
+            aoCancelar={() => setFixaEmEdicao(null)}
+          />
+        )}
+      </Sheet>
+
       <ImportarModal
         aberto={modalImportarAberto}
         aoFechar={() => setModalImportarAberto(false)}
@@ -251,6 +350,166 @@ export default function Lancamentos() {
         aoImportarVarios={(lista) => { lista.forEach((item) => adicionarLancamento(item)); setModalImportarAberto(false); }}
       />
     </div>
+  );
+}
+
+function ContaRecorrenteForm({ inicial, perfilAtivo, aoSalvar, aoExcluir, aoCancelar }) {
+  const { categorias } = useFinance();
+  const [descricao, setDescricao] = useState(inicial?.descricao ?? '');
+  const [valorStr, setValorStr] = useState(inicial?.valor ? String(inicial.valor).replace('.', ',') : '');
+  const [diaVencimento, setDiaVencimento] = useState(String(inicial?.diaVencimento ?? 10));
+  const [categoriaId, setCategoriaId] = useState(inicial?.categoriaId ?? categorias[0]?.id ?? 'moradia');
+  const [pagoPor, setPagoPor] = useState(inicial?.pagoPor ?? perfilAtivo ?? 'nathalia');
+  const [formaPagamento, setFormaPagamento] = useState(inicial?.formaPagamento ?? 'Pix');
+  const [pertenceCasa, setPertenceCasa] = useState(inicial?.pertenceCasa !== false);
+  const [ativa, setAtiva] = useState(inicial?.ativa !== false);
+  const [erro, setErro] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const valor = parseBRL(valorStr);
+    const dia = Math.min(31, Math.max(1, parseInt(diaVencimento, 10) || 1));
+    if (!descricao.trim()) {
+      setErro('Informe a descrição da conta fixa.');
+      return;
+    }
+    if (valor <= 0) {
+      setErro('Informe um valor maior que zero.');
+      return;
+    }
+    aoSalvar({
+      descricao: descricao.trim(),
+      valor,
+      diaVencimento: dia,
+      categoriaId,
+      pagoPor,
+      formaPagamento,
+      pertenceCasa,
+      ativa,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <Campo rotulo="Descrição" htmlFor="rec-desc" erro={erro && !descricao.trim() ? erro : ''}>
+        <input
+          id="rec-desc"
+          className={classeInput}
+          placeholder="Ex.: Aluguel, Internet, Academia..."
+          value={descricao}
+          onChange={(e) => { setDescricao(e.target.value); setErro(''); }}
+        />
+      </Campo>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Campo rotulo="Valor mensal (R$)" htmlFor="rec-valor" erro={erro && descricao.trim() ? erro : ''}>
+          <input
+            id="rec-valor"
+            className={classeInput}
+            inputMode="decimal"
+            placeholder="0,00"
+            value={valorStr}
+            onChange={(e) => { setValorStr(e.target.value); setErro(''); }}
+          />
+        </Campo>
+
+        <Campo rotulo="Dia do vencimento" htmlFor="rec-dia">
+          <input
+            id="rec-dia"
+            type="number"
+            min={1}
+            max={31}
+            className={classeInput}
+            value={diaVencimento}
+            onChange={(e) => setDiaVencimento(e.target.value)}
+          />
+        </Campo>
+      </div>
+
+      <Campo rotulo="Categoria" htmlFor="rec-cat">
+        <select id="rec-cat" className={classeInput} value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}>
+          {categorias.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.emoji} {c.nome}
+            </option>
+          ))}
+        </select>
+      </Campo>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Campo rotulo="Quem costuma pagar">
+          <Segmented
+            rotulo="Quem costuma pagar"
+            valor={pagoPor}
+            aoMudar={setPagoPor}
+            opcoes={[
+              { valor: 'nathalia', rotulo: 'Nathalia' },
+              { valor: 'alisson', rotulo: 'Alisson' },
+            ]}
+          />
+        </Campo>
+
+        <Campo rotulo="Forma de pagamento" htmlFor="rec-forma">
+          <select id="rec-forma" className={classeInput} value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}>
+            <option value="Pix">Pix</option>
+            <option value="Cartão de Crédito">Cartão de Crédito</option>
+            <option value="Débito">Débito</option>
+            <option value="Boleto">Boleto</option>
+            <option value="Débito Automático">Débito Automático</option>
+          </select>
+        </Campo>
+      </div>
+
+      <div className="space-y-2 rounded-lg border-2 border-[#1E1B18] bg-[#F3EFE6] p-3">
+        <label className="flex cursor-pointer items-center justify-between text-sm font-bold text-[#1E1B18]">
+          <span>Despesa compartilhada da casa</span>
+          <input
+            type="checkbox"
+            checked={pertenceCasa}
+            onChange={(e) => setPertenceCasa(e.target.checked)}
+            className="h-4 w-4 rounded border-2 border-[#1E1B18]"
+          />
+        </label>
+
+        {inicial && (
+          <label className="flex cursor-pointer items-center justify-between border-t border-[#1E1B18]/15 pt-2 text-sm font-bold text-[#1E1B18]">
+            <span>Conta fixa ativa nos próximos meses</span>
+            <input
+              type="checkbox"
+              checked={ativa}
+              onChange={(e) => setAtiva(e.target.checked)}
+              className="h-4 w-4 rounded border-2 border-[#1E1B18]"
+            />
+          </label>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+        {inicial && aoExcluir ? (
+          <Botao
+            type="button"
+            variante="perigo"
+            size="sm"
+            onClick={() => {
+              if (window.confirm(`Excluir permanentemente "${inicial.descricao}"?`)) aoExcluir();
+            }}
+          >
+            <Trash2 size={15} /> Excluir
+          </Botao>
+        ) : (
+          <span />
+        )}
+
+        <div className="flex items-center gap-2">
+          <Botao type="button" variante="secundario" onClick={aoCancelar}>
+            Cancelar
+          </Botao>
+          <Botao type="submit">
+            {inicial ? 'Salvar alterações' : 'Adicionar conta fixa'}
+          </Botao>
+        </div>
+      </div>
+    </form>
   );
 }
 
@@ -305,11 +564,19 @@ function ImportarModal({ aberto, aoFechar, dataPadrao, perfilAtivo, aoImportarVa
   return (
     <Sheet aberto={aberto} aoFechar={aoFechar} titulo="Importar extrato ou print">
       <div className="space-y-4">
-        <div className="flex rounded-xl bg-slate-100 p-1">
-          <button type="button" onClick={() => { setAba('extrato'); setItensExtraidos([]); }} className={`flex-1 rounded-lg py-2 text-sm font-semibold ${aba === 'extrato' ? 'bg-white text-brand-800 shadow-sm' : 'text-slate-600'}`}>
+        <div className="flex rounded-lg border-2 border-[#1E1B18] bg-[#F3EFE6] p-1">
+          <button
+            type="button"
+            onClick={() => { setAba('extrato'); setItensExtraidos([]); }}
+            className={`flex-1 rounded-md py-2 text-xs font-extrabold ${aba === 'extrato' ? 'border-[1.5px] border-[#1E1B18] bg-[#DDD6FE] text-[#1E1B18]' : 'text-stone-600'}`}
+          >
             Colar extrato
           </button>
-          <button type="button" onClick={() => { setAba('print'); setItensExtraidos([]); }} className={`flex-1 rounded-lg py-2 text-sm font-semibold ${aba === 'print' ? 'bg-white text-brand-800 shadow-sm' : 'text-slate-600'}`}>
+          <button
+            type="button"
+            onClick={() => { setAba('print'); setItensExtraidos([]); }}
+            className={`flex-1 rounded-md py-2 text-xs font-extrabold ${aba === 'print' ? 'border-[1.5px] border-[#1E1B18] bg-[#DDD6FE] text-[#1E1B18]' : 'text-stone-600'}`}
+          >
             Print / Comprovante (IA)
           </button>
         </div>
@@ -325,30 +592,30 @@ function ImportarModal({ aberto, aoFechar, dataPadrao, perfilAtivo, aoImportarVa
           </>
         ) : (
           <div className="space-y-3">
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-6 text-center hover:border-brand-500">
-              <Camera size={28} className="mb-2 text-brand-600" />
-              <span className="text-sm font-bold text-slate-800">Selecionar print ou comprovante</span>
-              <span className="mt-1 text-xs text-slate-500">Na Fase 2, o Gemini lerá valor, data e categoria automaticamente</span>
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#1E1B18] bg-[#F3EFE6] p-6 text-center hover:bg-[#FEFCE8]">
+              <Camera size={28} className="mb-2 text-[#1E1B18]" />
+              <span className="text-sm font-extrabold text-[#1E1B18]">Selecionar print ou comprovante</span>
+              <span className="mt-1 text-xs text-stone-600">Selecione uma imagem da galeria para preencher</span>
               <input type="file" accept="image/*" onChange={handleArquivoPrint} className="hidden" />
             </label>
-            {previewPrint && <img src={previewPrint} alt="Prévia do comprovante" className="mx-auto max-h-40 rounded-xl border border-slate-200 object-contain" />}
-            {lendoPrint && <p className="text-center text-sm font-semibold text-brand-700">Analisando comprovante...</p>}
+            {previewPrint && <img src={previewPrint} alt="Prévia do comprovante" className="mx-auto max-h-40 rounded-lg border-2 border-[#1E1B18] object-contain" />}
+            {lendoPrint && <p className="text-center text-sm font-extrabold text-[#1E1B18]">Analisando comprovante...</p>}
           </div>
         )}
 
         {itensExtraidos.length > 0 && (
-          <div className="space-y-3 border-t border-slate-200 pt-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{itensExtraidos.length} lançamento(s) pronto(s)</p>
+          <div className="space-y-3 border-t-2 border-[#1E1B18]/15 pt-3">
+            <p className="font-mono text-xs font-extrabold uppercase tracking-wide text-stone-600">{itensExtraidos.length} lançamento(s) pronto(s)</p>
             <ul className="space-y-2">
               {itensExtraidos.map((item, idx) => {
                 const cat = categorias.find((c) => c.id === item.categoriaId);
                 return (
-                  <li key={idx} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                  <li key={idx} className="flex items-center justify-between rounded-lg border-[1.5px] border-[#1E1B18] bg-[#F3EFE6] px-3 py-2 text-sm">
                     <div>
-                      <p className="font-bold text-slate-900">{cat?.emoji} {item.descricao}</p>
-                      <p className="text-xs text-slate-500">{formatarData(item.data)} • {cat?.nome}</p>
+                      <p className="font-extrabold text-[#1E1B18]">{cat?.emoji} {item.descricao}</p>
+                      <p className="text-xs text-stone-600">{formatarData(item.data)} • {cat?.nome}</p>
                     </div>
-                    <span className="font-bold tabular-nums text-slate-900">{formatarBRL(item.valor)}</span>
+                    <span className="font-extrabold tabular-nums text-[#1E1B18]">{formatarBRL(item.valor)}</span>
                   </li>
                 );
               })}
