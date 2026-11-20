@@ -305,6 +305,17 @@ export default function Lancamentos() {
             dataPadrao={dataPadrao}
             aoSalvar={(dados) => { atualizarLancamento(lancamentoEmEdicao.id, dados); setLancamentoEmEdicao(null); }}
             aoExcluir={() => { excluirLancamento(lancamentoEmEdicao.id); setLancamentoEmEdicao(null); }}
+            aoExcluirFuturas={() => {
+              const baseDesc = lancamentoEmEdicao.descricao.replace(/\s*\(\d+\/\d+\)$/, '');
+              const paraExcluir = lancamentos.filter((l) => {
+                if (lancamentoEmEdicao.parcelamentoId && l.parcelamentoId === lancamentoEmEdicao.parcelamentoId) {
+                  return l.data >= lancamentoEmEdicao.data;
+                }
+                return l.descricao.startsWith(`${baseDesc} (`) && l.data >= lancamentoEmEdicao.data;
+              });
+              paraExcluir.forEach((l) => excluirLancamento(l.id));
+              setLancamentoEmEdicao(null);
+            }}
             aoCancelar={() => setLancamentoEmEdicao(null)}
           />
         )}
@@ -490,7 +501,7 @@ function ContaRecorrenteForm({ inicial, perfilAtivo, aoSalvar, aoExcluir, aoCanc
           <Botao
             type="button"
             variante="perigo"
-            size="sm"
+            tamanho="sm"
             onClick={() => {
               if (window.confirm(`Excluir permanentemente "${inicial.descricao}"?`)) aoExcluir();
             }}
