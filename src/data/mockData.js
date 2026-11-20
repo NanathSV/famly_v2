@@ -15,7 +15,7 @@ const dataPendente = (dia) => dataNoMes(0, Math.max(dia, DIA_HOJE + 1));
 let sequencia = 0;
 const proximoId = (prefixo) => `${prefixo}-${String(++sequencia).padStart(3, '0')}`;
 
-export const FORMAS_PAGAMENTO = ['Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Dinheiro', 'Boleto', 'Alimentação (CAJU/VR/VA)'];
+export const FORMAS_PAGAMENTO = ['Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Dinheiro', 'Boleto', ' Nubank ' , ' Itau ', 'Alimentação (CAJU/VR/VA)'];
 export const STATUS_LANCAMENTO = ['Pago', 'Pendente'];
 export const TIPOS_LANCAMENTO = ['Fixo', 'Variável'];
 export const REGRAS_DIVISAO = [
