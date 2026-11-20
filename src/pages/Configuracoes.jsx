@@ -1,25 +1,47 @@
 import { useState } from 'react';
-import { Check, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, RotateCcw, Tag, Trash2, X } from 'lucide-react';
 import RegraDivisaoSelector from '../components/RegraDivisaoSelector';
-import { Avatar, Botao, Campo, Painel, SecaoTitulo, classeInput } from '../components/ui';
+import { Avatar, Botao, Campo, Chip, Painel, SecaoTitulo, Segmented, classeInput } from '../components/ui';
 import { useFinance } from '../context/FinanceContext';
 import { formatarBRL, formatarPercentual, parseBRL } from '../utils/calculations';
+
+const EMOJIS_SUGERIDOS = ['👶', '🐾', '💅', '✈️', '🎁', '📚', '🎮', '🏋️', '🍕', '🚗', '💊', '🏠', '👗', '🛠️'];
 
 export default function Configuracoes() {
   const {
     pessoas,
     rendas,
+    categorias,
     proporcaoRenda,
     adicionarRenda,
     atualizarRenda,
     alternarRendaAtiva,
     excluirRenda,
+    adicionarCategoria,
+    atualizarCategoria,
+    excluirCategoria,
     resetarDados,
   } = useFinance();
 
+  // Rendas
   const [novaRenda, setNovaRenda] = useState({ pessoaId: 'nathalia', descricao: '', valor: '' });
   const [rendaEditandoId, setRendaEditandoId] = useState(null);
   const [formEdicaoRenda, setFormEdicaoRenda] = useState({ descricao: '', valor: '' });
+
+  // Categorias
+  const [novaCat, setNovaCat] = useState({
+    emoji: '👶',
+    nome: '',
+    tipoPadrao: 'Variável',
+    pertenceCasaPadrao: true,
+  });
+  const [catEditandoId, setCatEditandoId] = useState(null);
+  const [formEdicaoCat, setFormEdicaoCat] = useState({
+    emoji: '',
+    nome: '',
+    tipoPadrao: 'Variável',
+    pertenceCasaPadrao: true,
+  });
 
   const handleAdicionarRenda = (e) => {
     e.preventDefault();
@@ -44,13 +66,37 @@ export default function Configuracoes() {
     setRendaEditandoId(null);
   };
 
+  const handleAdicionarCategoria = (e) => {
+    e.preventDefault();
+    if (!novaCat.nome.trim()) return;
+    adicionarCategoria(novaCat);
+    setNovaCat({ emoji: '🏷️', nome: '', tipoPadrao: 'Variável', pertenceCasaPadrao: true });
+  };
+
+  const iniciarEdicaoCat = (cat) => {
+    setCatEditandoId(cat.id);
+    setFormEdicaoCat({
+      emoji: cat.emoji,
+      nome: cat.nome,
+      tipoPadrao: cat.tipoPadrao || 'Variável',
+      pertenceCasaPadrao: cat.pertenceCasaPadrao !== false,
+    });
+  };
+
+  const salvarEdicaoCat = (id) => {
+    if (!formEdicaoCat.nome.trim()) return;
+    atualizarCategoria(id, formEdicaoCat);
+    setCatEditandoId(null);
+  };
+
   return (
     <div className="space-y-7">
       <div>
         <h1 className="text-2xl font-extrabold text-[#1E1B18]">Configurações</h1>
-        <p className="text-sm text-stone-600">Rendas do casal, modelo de divisão e dados do aplicativo</p>
+        <p className="text-sm text-stone-600">Rendas do casal, categorias personalizadas, divisão e sistema</p>
       </div>
 
+      {/* Seção 1: Rendas */}
       <section className="space-y-4">
         <SecaoTitulo titulo="Rendas mensais do casal" />
         <div className="grid gap-4 sm:grid-cols-2">
@@ -203,6 +249,182 @@ export default function Configuracoes() {
         </Painel>
       </section>
 
+      {/* Seção 2: Categorias de Gastos */}
+      <section className="space-y-4">
+        <SecaoTitulo titulo="Categorias de gastos" />
+
+        <Painel corBarra="lilas" tituloJanela="Nova_Categoria.exe">
+          <form onSubmit={handleAdicionarCategoria} className="space-y-3">
+            <p className="text-sm font-extrabold text-[#1E1B18]">Criar nova categoria</p>
+
+            {/* Atalhos rápidos de emoji */}
+            <div className="flex flex-wrap gap-1.5">
+              {EMOJIS_SUGERIDOS.map((em) => (
+                <button
+                  key={em}
+                  type="button"
+                  onClick={() => setNovaCat((c) => ({ ...c, emoji: em }))}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg border-[1.5px] border-[#1E1B18] text-base transition-all ${
+                    novaCat.emoji === em ? 'bg-[#FDE68A] shadow-[1.5px_1.5px_0_#1E1B18]' : 'bg-[#FFFDF9] hover:bg-[#F3EFE6]'
+                  }`}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Campo rotulo="Emoji" htmlFor="cat-emoji">
+                <input
+                  id="cat-emoji"
+                  className={`${classeInput} text-center text-lg`}
+                  maxLength={4}
+                  value={novaCat.emoji}
+                  onChange={(e) => setNovaCat((c) => ({ ...c, emoji: e.target.value }))}
+                />
+              </Campo>
+              <div className="sm:col-span-3">
+                <Campo rotulo="Nome da categoria" htmlFor="cat-nome">
+                  <input
+                    id="cat-nome"
+                    className={classeInput}
+                    placeholder="Ex.: Filha, Pets, Beleza, Viagens..."
+                    value={novaCat.nome}
+                    onChange={(e) => setNovaCat((c) => ({ ...c, nome: e.target.value }))}
+                  />
+                </Campo>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo rotulo="Tipo padrão">
+                <Segmented
+                  rotulo="Tipo padrão"
+                  valor={novaCat.tipoPadrao}
+                  aoMudar={(v) => setNovaCat((c) => ({ ...c, tipoPadrao: v }))}
+                  opcoes={[
+                    { valor: 'Variável', rotulo: 'Variável' },
+                    { valor: 'Fixo', rotulo: 'Fixo' },
+                  ]}
+                />
+              </Campo>
+              <Campo rotulo="Entra no acerto da casa por padrão?">
+                <Segmented
+                  rotulo="Entra na casa"
+                  valor={novaCat.pertenceCasaPadrao}
+                  aoMudar={(v) => setNovaCat((c) => ({ ...c, pertenceCasaPadrao: v }))}
+                  opcoes={[
+                    { valor: true, rotulo: 'Sim (Casa)' },
+                    { valor: false, rotulo: 'Não (Individual)' },
+                  ]}
+                />
+              </Campo>
+            </div>
+
+            <Botao type="submit" tamanho="sm">
+              <Tag size={15} /> Criar categoria
+            </Botao>
+          </form>
+        </Painel>
+
+        <Painel corBarra="verde" tituloJanela="Categorias_Ativas.dat" className="!p-0">
+          <ul className="-m-4 divide-y-2 divide-[#1E1B18]/15">
+            {categorias.map((cat) => {
+              const editando = catEditandoId === cat.id;
+              return (
+                <li key={cat.id} className="px-4 py-3 text-sm">
+                  {editando ? (
+                    <div className="space-y-2.5 rounded-lg border-[1.5px] border-[#1E1B18] bg-[#F3EFE6] p-3">
+                      <div className="grid grid-cols-4 gap-2">
+                        <input
+                          className={`${classeInput} text-center text-base`}
+                          maxLength={4}
+                          value={formEdicaoCat.emoji}
+                          onChange={(e) => setFormEdicaoCat((f) => ({ ...f, emoji: e.target.value }))}
+                        />
+                        <input
+                          className={`${classeInput} col-span-3`}
+                          value={formEdicaoCat.nome}
+                          onChange={(e) => setFormEdicaoCat((f) => ({ ...f, nome: e.target.value }))}
+                          placeholder="Nome da categoria"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Segmented
+                          rotulo="Tipo"
+                          valor={formEdicaoCat.tipoPadrao}
+                          aoMudar={(v) => setFormEdicaoCat((f) => ({ ...f, tipoPadrao: v }))}
+                          opcoes={[
+                            { valor: 'Variável', rotulo: 'Variável' },
+                            { valor: 'Fixo', rotulo: 'Fixo' },
+                          ]}
+                        />
+                        <Segmented
+                          rotulo="Casa"
+                          valor={formEdicaoCat.pertenceCasaPadrao}
+                          aoMudar={(v) => setFormEdicaoCat((f) => ({ ...f, pertenceCasaPadrao: v }))}
+                          opcoes={[
+                            { valor: true, rotulo: 'Casa' },
+                            { valor: false, rotulo: 'Individual' },
+                          ]}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Botao type="button" variante="secundario" tamanho="sm" onClick={() => setCatEditandoId(null)}>
+                          Cancelar
+                        </Botao>
+                        <Botao type="button" tamanho="sm" onClick={() => salvarEdicaoCat(cat.id)}>
+                          <Check size={14} /> Salvar
+                        </Botao>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg border-[1.5px] border-[#1E1B18] bg-[#F3EFE6] text-base">
+                          {cat.emoji}
+                        </span>
+                        <div>
+                          <p className="font-extrabold text-[#1E1B18]">{cat.nome}</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                            <Chip tom="neutro">{cat.tipoPadrao || 'Variável'}</Chip>
+                            {cat.pertenceCasaPadrao !== false && <Chip tom="marca">Casa</Chip>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => iniciarEdicaoCat(cat)}
+                          className="rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] p-1.5 text-[#1E1B18] hover:bg-[#FDE68A]"
+                          title="Editar categoria"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        {cat.customizada && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Excluir a categoria "${cat.nome}"?`)) excluirCategoria(cat.id);
+                            }}
+                            className="rounded-md border-[1.5px] border-[#1E1B18] bg-[#FFFDF9] p-1.5 text-[#1E1B18] hover:bg-[#FDA4AF]"
+                            title="Excluir categoria"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </Painel>
+      </section>
+
+      {/* Seção 3: Modelo de divisão */}
       <section>
         <SecaoTitulo titulo="Modelo de divisão dos gastos da casa" />
         <Painel corBarra="azul" tituloJanela="Divisao_Casal.sys">
@@ -210,9 +432,10 @@ export default function Configuracoes() {
         </Painel>
       </section>
 
+      {/* Seção 4: Dados do aplicativo */}
       <section>
         <SecaoTitulo titulo="Dados do aplicativo" />
-        <Painel corBarra="verde" tituloJanela="Sistema_Reset.cfg" className="flex flex-wrap items-center justify-between gap-3">
+        <Painel corBarra="rosa" tituloJanela="Sistema_Reset.cfg" className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-extrabold text-[#1E1B18]">Restaurar dados iniciais</p>
             <p className="text-xs text-stone-600">Limpa as alterações salvas e volta para o cenário padrão.</p>
