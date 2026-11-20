@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Camera, Check, Clock, FileText, Pencil, Plus, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, Camera, Check, Clock, FileText, Pencil, Plus, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-react';
 import LancamentoForm from '../components/LancamentoForm';
 import { Avatar, Botao, Campo, Chip, EstadoVazio, Painel, Segmented, Sheet, classeInput } from '../components/ui';
 import { useFinance } from '../context/FinanceContext';
@@ -37,9 +37,9 @@ export default function Lancamentos() {
   const [lancamentoEmEdicao, setLancamentoEmEdicao] = useState(null);
   const [modalImportarAberto, setModalImportarAberto] = useState(false);
   const [mostrarRecorrentes, setMostrarRecorrentes] = useState(false);
+  const [mostrarAtrasados, setMostrarAtrasados] = useState(false);
   const [avisoRecorrentes, setAvisoRecorrentes] = useState('');
 
-  // Estados para criar / editar contas fixas recorrentes
   const [modalNovaFixaAberto, setModalNovaFixaAberto] = useState(false);
   const [fixaEmEdicao, setFixaEmEdicao] = useState(null);
 
@@ -47,6 +47,18 @@ export default function Lancamentos() {
     const hoje = hojeISO();
     return mesKeyDe(hoje) === mesSelecionado ? hoje : `${mesSelecionado}-01`;
   }, [mesSelecionado]);
+
+  // Contas pendentes de meses anteriores ao mês selecionado
+  const pendenciasAnteriores = useMemo(() => {
+    return lancamentos
+      .filter((l) => l.status !== 'Pago' && mesKeyDe(l.data) < mesSelecionado)
+      .sort((a, b) => a.data.localeCompare(b.data));
+  }, [lancamentos, mesSelecionado]);
+
+  const totalPendenciasAnteriores = useMemo(
+    () => somarValores(pendenciasAnteriores, (l) => l.valor),
+    [pendenciasAnteriores]
+  );
 
   const recorrentesPendentesDeGerar = useMemo(() => {
     const ativas = contasRecorrentes.filter((c) => c.ativa !== false);
@@ -99,6 +111,65 @@ export default function Lancamentos() {
           </Botao>
         </div>
       </div>
+
+      {/* Alerta de contas pendentes/atrasadas de meses anteriores */}
+      {pendenciasAnteriores.length > 0 && (
+        <Painel corBarra="rosa" tituloJanela="Pendencias_Anteriores.alert">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={18} className="shrink-0 text-rose-700" />
+              <div>
+                <p className="text-sm font-extrabold text-[#1E1B18]">
+                  {pendenciasAnteriores.length} conta(s) pendente(s) de meses anteriores
+                </p>
+                <p className="text-xs font-semibold text-stone-700">
+                  Total em aberto de meses passados: <strong className="tabular-nums text-rose-700">{formatarBRL(totalPendenciasAnteriores)}</strong>
+                </p>
+              </div>
+            </div>
+            <Botao variante="secundario" tamanho="sm" onClick={() => setMostrarAtrasados((v) => !v)}>
+              {mostrarAtrasados ? 'Ocultar' : 'Ver pendências'}
+            </Botao>
+          </div>
+
+          {mostrarAtrasados && (
+            <ul className="mt-3 divide-y divide-[#1E1B18]/15 border-t-2 border-dashed border-[#1E1B18]/20 pt-2">
+              {pendenciasAnteriores.map((item) => {
+                const cat = getCategoria(item.categoriaId);
+                return (
+                  <li
+                    key={item.id}
+                    onClick={() => setLancamentoEmEdicao(item)}
+                    className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-[#F3EFE6]"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-extrabold text-[#1E1B18]">
+                        {cat?.emoji} {item.descricao}
+                      </p>
+                      <p className="text-xs text-stone-600">
+                        Venceu em {formatarData(item.data)} • {nomeDoMes(mesKeyDe(item.data))}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold tabular-nums text-[#1E1B18]">{formatarBRL(item.valor)}</span>
+                      <Botao
+                        variante="suave"
+                        tamanho="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          marcarComoPago(item.id);
+                        }}
+                      >
+                        <Check size={13} /> Pagar
+                      </Botao>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Painel>
+      )}
 
       <Painel corBarra="azul" tituloJanela="Contas_Fixas.sys">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -287,7 +358,6 @@ export default function Lancamentos() {
         </Painel>
       )}
 
-      {/* Modal: Novo Lançamento */}
       <Sheet aberto={modalNovoAberto} aoFechar={() => setModalNovoAberto(false)} titulo="Novo lançamento">
         <LancamentoForm
           inicial={null}
@@ -297,7 +367,6 @@ export default function Lancamentos() {
         />
       </Sheet>
 
-      {/* Modal: Editar Lançamento */}
       <Sheet aberto={Boolean(lancamentoEmEdicao)} aoFechar={() => setLancamentoEmEdicao(null)} titulo="Editar lançamento">
         {lancamentoEmEdicao && (
           <LancamentoForm
@@ -321,7 +390,6 @@ export default function Lancamentos() {
         )}
       </Sheet>
 
-      {/* Modal: Nova Conta Fixa Recorrente */}
       <Sheet aberto={modalNovaFixaAberto} aoFechar={() => setModalNovaFixaAberto(false)} titulo="Nova conta fixa">
         <ContaRecorrenteForm
           inicial={null}
@@ -335,7 +403,6 @@ export default function Lancamentos() {
         />
       </Sheet>
 
-      {/* Modal: Editar Conta Fixa Recorrente */}
       <Sheet aberto={Boolean(fixaEmEdicao)} aoFechar={() => setFixaEmEdicao(null)} titulo="Editar conta fixa">
         {fixaEmEdicao && (
           <ContaRecorrenteForm
