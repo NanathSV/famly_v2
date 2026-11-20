@@ -15,6 +15,7 @@ const FILTROS = [
 
 export default function Lancamentos() {
   const {
+    lancamentos,
     lancamentosDoMes,
     contasRecorrentes,
     mesSelecionado,
