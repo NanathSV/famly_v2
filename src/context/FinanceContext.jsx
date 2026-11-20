@@ -127,6 +127,9 @@ export const ACOES = {
   RENDA_UPDATE: 'RENDA_UPDATE',
   RENDA_TOGGLE: 'RENDA_TOGGLE',
   RENDA_DELETE: 'RENDA_DELETE',
+  CATEGORIA_ADD: 'CATEGORIA_ADD',
+  CATEGORIA_UPDATE: 'CATEGORIA_UPDATE',
+  CATEGORIA_DELETE: 'CATEGORIA_DELETE',
   REGRA_DIVISAO_SET: 'REGRA_DIVISAO_SET',
   TETO_SET: 'TETO_SET',
   RECORRENTE_ADD: 'RECORRENTE_ADD',
@@ -200,6 +203,33 @@ function reducer(state, { type, payload }) {
       return { ...state, rendas: trocarPorId(state.rendas, payload, (r) => ({ ...r, ativa: !r.ativa })) };
     case ACOES.RENDA_DELETE:
       return { ...state, rendas: removerPorId(state.rendas, payload) };
+    case ACOES.CATEGORIA_ADD: {
+      const nova = {
+        id: gerarId('cat'),
+        nome: String(payload.nome || '').trim(),
+        emoji: String(payload.emoji || '🏷️').trim() || '🏷️',
+        tipoPadrao: payload.tipoPadrao === 'Fixo' ? 'Fixo' : 'Variável',
+        pertenceCasaPadrao: payload.pertenceCasaPadrao !== false,
+        customizada: true,
+      };
+      return { ...state, categorias: [...state.categorias, nova] };
+    }
+    case ACOES.CATEGORIA_UPDATE:
+      return {
+        ...state,
+        categorias: trocarPorId(state.categorias, payload.id, (c) => ({
+          ...c,
+          ...payload.patch,
+          nome: String(payload.patch.nome ?? c.nome).trim(),
+          emoji: String(payload.patch.emoji ?? c.emoji).trim() || c.emoji,
+        })),
+      };
+    case ACOES.CATEGORIA_DELETE:
+      return {
+        ...state,
+        categorias: removerPorId(state.categorias, payload),
+        tetosOrcamento: state.tetosOrcamento.filter((t) => t.categoriaId !== payload),
+      };
     case ACOES.REGRA_DIVISAO_SET:
       return {
         ...state,
@@ -317,7 +347,6 @@ export function FinanceProvider({ children }) {
   const prontoParaNuvem = useRef(false);
   const ignorarProximoEnvio = useRef(false);
 
-  // 1. Carrega estado inicial da nuvem (Supabase) e ativa escuta em tempo real
   useEffect(() => {
     if (!supabase) {
       prontoParaNuvem.current = true;
@@ -340,7 +369,6 @@ export function FinanceProvider({ children }) {
           ignorarProximoEnvio.current = true;
           dispatch({ type: ACOES.SYNC_NUVEM, payload: data.dados });
         } else if (!error && !data) {
-          // Primeira vez: envia os dados iniciais para o Supabase
           const iniciais = extrairDadosPersistiveis(state);
           await supabase.from('app_state').upsert({ id: 1, dados: iniciais, updated_at: new Date().toISOString() });
         }
@@ -374,7 +402,6 @@ export function FinanceProvider({ children }) {
     };
   }, []);
 
-  // 2. Salva no localStorage e sincroniza com o Supabase sempre que houver alteração
   useEffect(() => {
     salvarEstadoLocal(state);
 
@@ -405,7 +432,6 @@ export function FinanceProvider({ children }) {
     const lancamentosDoMes = lancamentos.filter((l) => mesKeyDe(l.data) === mesSelecionado).sort((a, b) => b.data.localeCompare(a.data));
     const resumoMes = calcularResumoMensal(lancamentos, rendas, mesSelecionado);
 
-    // Cálculo de evolução histórica (últimos 6 meses + comparativo com mês anterior)
     const mesAnt = mesAnteriorKey(mesSelecionado);
     const resumoMesAnterior = calcularResumoMensal(lancamentos, rendas, mesAnt);
     const diferencaGasto = arredondar(resumoMes.totalPrevisto - resumoMesAnterior.totalPrevisto);
@@ -425,7 +451,6 @@ export function FinanceProvider({ children }) {
       };
     });
 
-    // Comparativo por categoria vs mês anterior
     const gastosAtualCat = calcularGastosPorCategoria(lancamentos, mesSelecionado);
     const gastosAntCat = calcularGastosPorCategoria(lancamentos, mesAnt);
     const comparativoCategorias = categorias
@@ -436,7 +461,7 @@ export function FinanceProvider({ children }) {
         return { categoria: cat, atual, anterior, diff };
       })
       .filter((item) => item.atual > 0 || item.anterior > 0)
-      .sort((a, b) => a.diff - b.diff); // Maiores economias primeiro
+      .sort((a, b) => a.diff - b.diff);
 
     return {
       hoje,
@@ -477,6 +502,9 @@ export function FinanceProvider({ children }) {
       atualizarRenda: (id, patch) => dispatch({ type: ACOES.RENDA_UPDATE, payload: { id, patch } }),
       alternarRendaAtiva: (id) => dispatch({ type: ACOES.RENDA_TOGGLE, payload: id }),
       excluirRenda: (id) => dispatch({ type: ACOES.RENDA_DELETE, payload: id }),
+      adicionarCategoria: (dados) => dispatch({ type: ACOES.CATEGORIA_ADD, payload: dados }),
+      atualizarCategoria: (id, patch) => dispatch({ type: ACOES.CATEGORIA_UPDATE, payload: { id, patch } }),
+      excluirCategoria: (id) => dispatch({ type: ACOES.CATEGORIA_DELETE, payload: id }),
       definirRegraDivisao: (regra) => dispatch({ type: ACOES.REGRA_DIVISAO_SET, payload: regra }),
       definirTeto: (categoriaId, valor) => dispatch({ type: ACOES.TETO_SET, payload: { categoriaId, valor } }),
       adicionarContaRecorrente: (dados) => dispatch({ type: ACOES.RECORRENTE_ADD, payload: dados }),
