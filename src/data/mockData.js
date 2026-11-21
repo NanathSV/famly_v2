@@ -27,6 +27,7 @@ export const REGRAS_DIVISAO = [
 export const PESSOAS = [
   { id: 'nathalia', nome: 'Nathalia', inicial: 'N', cor: '#ec4899' },
   { id: 'alisson', nome: 'Alisson', inicial: 'A', cor: '#6366f1' },
+  { id: 'familia', nome: 'Nat e Ali ', inicial: 'N&A', cor: '#10b981' },
 ];
 
 export const RENDAS = [
